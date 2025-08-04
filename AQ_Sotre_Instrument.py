@@ -10,6 +10,16 @@ st.title("🔧 AQ Store - Instrument Tracker")
 
 data_file = "instrument_data.csv"
 
+# Predefined instrument list - add or edit as needed
+instrument_list = [
+    "Ultrasonic Flowmeter",
+    "Lux Meter",
+    "Fluke Power Quality Analyzer",
+    "Distance Gun",
+    "eGauge",
+    "Temperature Data Logger"
+]
+
 # Load or create data
 if not os.path.exists(data_file):
     df = pd.DataFrame(columns=["Instrument", "Quantity", "Issue Date", "Return Date", "Issued To"])
@@ -26,15 +36,15 @@ st.sidebar.header("➕ Add New Instrument Issue")
 
 with st.sidebar.form("add_instrument_form", clear_on_submit=True):
     issued_to = st.text_input("Issued To (Person's Name)", max_chars=50)
-    instrument = st.text_input("Instrument Name", max_chars=100)
+    instrument = st.selectbox("Select Instrument", options=instrument_list)
     quantity = st.number_input("Quantity", min_value=1, step=1)
     issue_date = st.date_input("Issue Date", value=datetime.today())
     return_date = st.date_input("Return Date", value=datetime.today())
     submitted = st.form_submit_button("Add Entry")
 
 if submitted:
-    if not issued_to or not instrument:
-        st.sidebar.error("Please fill in both 'Issued To' and 'Instrument Name'.")
+    if not issued_to:
+        st.sidebar.error("Please fill in the 'Issued To' field.")
     else:
         new_entry = {
             "Instrument": instrument,
@@ -45,7 +55,7 @@ if submitted:
         }
         df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
         df.to_csv(data_file, index=False)
-        st.sidebar.success(f"Added entry for {instrument} issued to {issued_to}.")
+        st.sidebar.success(f"Added entry: {instrument} issued to {issued_to}.")
 
         # Refresh date columns
         df["Issue Date"] = pd.to_datetime(df["Issue Date"], errors="coerce")
