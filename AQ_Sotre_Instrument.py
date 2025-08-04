@@ -43,11 +43,11 @@ if submitted:
             "Return Date": pd.to_datetime(return_date),
             "Issued To": issued_to,
         }
-        df = df.append(new_entry, ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
         df.to_csv(data_file, index=False)
         st.sidebar.success(f"Added entry for {instrument} issued to {issued_to}.")
 
-        # Refresh df with updated data
+        # Refresh date columns
         df["Issue Date"] = pd.to_datetime(df["Issue Date"], errors="coerce")
         df["Return Date"] = pd.to_datetime(df["Return Date"], errors="coerce")
 
