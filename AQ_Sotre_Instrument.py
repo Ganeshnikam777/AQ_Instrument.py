@@ -8,10 +8,9 @@ import os
 st.set_page_config(page_title="Instrument Tracker", layout="wide")
 st.title("🔧 AQ Store - Instrument Tracker")
 
-# Data file path
 data_file = "instrument_data.csv"
 
-# Load data or create empty CSV if not exists
+# Load or create data
 if not os.path.exists(data_file):
     df = pd.DataFrame(columns=["Instrument", "Quantity", "Issue Date", "Return Date", "Issued To"])
     df.to_csv(data_file, index=False)
@@ -22,10 +21,40 @@ else:
 df["Issue Date"] = pd.to_datetime(df["Issue Date"], errors="coerce")
 df["Return Date"] = pd.to_datetime(df["Return Date"], errors="coerce")
 
-# Remove rows where Issue Date is NaT (optional: you can keep if you want)
+# --- Entry form ---
+st.sidebar.header("➕ Add New Instrument Issue")
+
+with st.sidebar.form("add_instrument_form", clear_on_submit=True):
+    issued_to = st.text_input("Issued To (Person's Name)", max_chars=50)
+    instrument = st.text_input("Instrument Name", max_chars=100)
+    quantity = st.number_input("Quantity", min_value=1, step=1)
+    issue_date = st.date_input("Issue Date", value=datetime.today())
+    return_date = st.date_input("Return Date", value=datetime.today())
+    submitted = st.form_submit_button("Add Entry")
+
+if submitted:
+    if not issued_to or not instrument:
+        st.sidebar.error("Please fill in both 'Issued To' and 'Instrument Name'.")
+    else:
+        new_entry = {
+            "Instrument": instrument,
+            "Quantity": quantity,
+            "Issue Date": pd.to_datetime(issue_date),
+            "Return Date": pd.to_datetime(return_date),
+            "Issued To": issued_to,
+        }
+        df = df.append(new_entry, ignore_index=True)
+        df.to_csv(data_file, index=False)
+        st.sidebar.success(f"Added entry for {instrument} issued to {issued_to}.")
+
+        # Refresh df with updated data
+        df["Issue Date"] = pd.to_datetime(df["Issue Date"], errors="coerce")
+        df["Return Date"] = pd.to_datetime(df["Return Date"], errors="coerce")
+
+# Remove rows with missing Issue Date
 df = df[~df["Issue Date"].isna()]
 
-# Sidebar filters
+# --- Filters ---
 st.sidebar.header("🔍 Filter Records")
 
 person_filter = st.sidebar.selectbox(
@@ -36,7 +65,6 @@ instrument_filter = st.sidebar.selectbox(
     "Filter by Instrument", options=["All"] + sorted(df["Instrument"].dropna().unique())
 )
 
-# Handle NaT safely for date_input
 valid_issue_dates = df["Issue Date"].dropna()
 if not valid_issue_dates.empty:
     min_date = valid_issue_dates.min().date()
@@ -64,11 +92,11 @@ if len(date_range) == 2:
         (filtered_df["Issue Date"] >= start_date) & (filtered_df["Issue Date"] <= end_date)
     ]
 
-# Show filtered data
+# Display filtered data
 st.subheader("📋 Filtered Records")
 st.dataframe(filtered_df, use_container_width=True)
 
-# Excel download button with safe filename
+# Excel export
 if not filtered_df.empty:
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
