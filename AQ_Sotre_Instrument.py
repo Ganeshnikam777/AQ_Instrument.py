@@ -2,47 +2,71 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
+import os
 
-# Set page config
+# Set page layout
 st.set_page_config(page_title="Instrument Tracker", layout="wide")
+st.title("🔧 AQ Store - Instrument Tracker")
 
-# Title
-st.title("AQ Store - Instrument Tracker")
+# Local CSV data source
+data_file = "instrument_data.csv"
 
-# Upload CSV
-uploaded_file = st.file_uploader("Upload Instrument Tracker Excel File", type=["xlsx"])
+# Load or create data file
+if not os.path.exists(data_file):
+    df = pd.DataFrame(columns=["Instrument", "Quantity", "Issue Date", "Return Date", "Issued To"])
+    df.to_csv(data_file, index=False)
+else:
+    df = pd.read_csv(data_file)
 
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+# Parse dates safely
+df['Issue Date'] = pd.to_datetime(df['Issue Date'], errors='coerce')
+df['Return Date'] = pd.to_datetime(df['Return Date'], errors='coerce')
 
-    # Convert 'Issue Date' column to datetime safely
-    if 'Issue Date' in df.columns:
-        df['Issue Date'] = pd.to_datetime(df['Issue Date'], errors='coerce')
+# Sidebar filters
+st.sidebar.header("🔍 Filter Records")
 
-    # Sidebar filters
-    current_year = datetime.now().year
-    selected_month = st.sidebar.date_input("Select Month", value=datetime.now()).replace(day=1)
+person_filter = st.sidebar.selectbox("Filter by Issued To", options=["All"] + sorted(df["Issued To"].dropna().unique().tolist()))
+instrument_filter = st.sidebar.selectbox("Filter by Instrument", options=["All"] + sorted(df["Instrument"].dropna().unique().tolist()))
+date_range = st.sidebar.date_input("Filter by Issue Date Range", value=[df['Issue Date'].min(), df['Issue Date'].max()])
 
-    # Filter data based on selected month
-    filtered_df = df[
-        (df['Issue Date'].dt.year == selected_month.year) &
-        (df['Issue Date'].dt.month == selected_month.month)
+# Apply filters
+filtered_df = df.copy()
+
+if person_filter != "All":
+    filtered_df = filtered_df[filtered_df["Issued To"] == person_filter]
+
+if instrument_filter != "All":
+    filtered_df = filtered_df[filtered_df["Instrument"] == instrument_filter]
+
+if len(date_range) == 2:
+    start_date, end_date = pd.to_datetime(date_range)
+    filtered_df = filtered_df[
+        (filtered_df["Issue Date"] >= start_date) &
+        (filtered_df["Issue Date"] <= end_date)
     ]
 
-    # Display filtered data
-    st.subheader(f"Issued Instruments - {selected_month.strftime('%B %Y')}")
-    st.dataframe(filtered_df)
+# Display filtered records
+st.subheader("📋 Filtered Records")
+st.dataframe(filtered_df, use_container_width=True)
 
-    # Download filtered data as Excel
-    if not filtered_df.empty:
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            filtered_df.to_excel(writer, index=False, sheet_name='FilteredData')
-        st.download_button(
-            label="📥 Download Excel",
-            data=output.getvalue(),
-            file_name=f"Instrument_Report_{selected_month.strftime('%b_%Y')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+# Download Excel Report (with NaT fix)
+if not filtered_df.empty:
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        filtered_df.to_excel(writer, index=False, sheet_name='FilteredData')
+
+    # Fix NaTType issue
+    min_date = filtered_df['Issue Date'].min()
+    if pd.isna(min_date):
+        report_date = datetime.now().strftime('%Y-%m-%d')
     else:
-        st.info("No data found for the selected month.")
+        report_date = min_date.strftime('%Y-%m-%d')
+
+    st.download_button(
+        label="📥 Download Excel Report",
+        data=output.getvalue(),
+        file_name=f"Instrument_Report_{report_date}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+else:
+    st.info("No records found for the applied filters.")
